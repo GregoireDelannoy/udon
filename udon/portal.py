@@ -135,12 +135,13 @@ class Portal:
 
 class OpenIDClient:
 
-    def __init__(self, host, realm, client_id, client_secret, verify = True):
+    def __init__(self, host, realm, client_id, client_secret, verify = True, scope = 'openid'):
         self.verify = verify
         self.realm = realm
         self.host = host
         self.client_id = client_id
         self.client_secret = client_secret
+        self.scope = scope
 
     def _url(self, action):
         return "%s/auth/realms/%s/protocol/openid-connect/%s" % (self.host, self.realm, action)
@@ -153,7 +154,7 @@ class OpenIDClient:
     def login(self, username, password):
         return self._request('POST', 'token', data = { 'client_id': self.client_id,
                                                        'client_secret': self.client_secret,
-                                                       'scope': 'openid',
+                                                       'scope': self.scope,
                                                        'grant_type': 'password',
                                                        'username': username,
                                                        'password': password }).json()
@@ -229,7 +230,10 @@ class Session:
 
     def _granted(self, grant):
         access_timeout = parse_jwt(grant['access_token'])['content']['exp']
-        refresh_timeout = parse_jwt(grant['refresh_token'])['content']['exp']
+        refresh_timeout = parse_jwt(grant['refresh_token'])['content'].get('exp')
         self.grant = grant
         self.access_timeout = access_timeout + self.access_dt
-        self.refresh_timeout = refresh_timeout + self.refresh_dt
+        if refresh_timeout: # When used with offline tokens, exp (= expiry) is not necessarily set
+            self.refresh_timeout = refresh_timeout + self.refresh_dt
+        else:
+            self.refresh_timeout = -1
